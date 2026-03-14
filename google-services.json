@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1079872251980",
+    "project_id": "arabwerk-c8443",
+    "storage_bucket": "arabwerk-c8443.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1079872251980:android:45e1dded5e419f97576ce9",
+        "android_client_info": {
+          "package_name": "com.arabwerk.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_1gkVaKOMNWWZIwIRt7wBOF6RcOZuWO8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
