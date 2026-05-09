@@ -1,5 +1,4 @@
 import { Stack } from 'expo-router';
-
 export default function ProviderLayout() {
   return (
     <Stack screenOptions={{ gestureEnabled: false }}>
@@ -12,7 +11,6 @@ export default function ProviderLayout() {
         name="choose-subscription"
         options={{ headerShown: false, presentation: 'card', gestureEnabled: false, animation: 'slide_from_right' }}
       />
-      {/* ── New: upgrade from profile (has back button) ── */}
       <Stack.Screen
         name="upgrade-subscription"
         options={{ headerShown: false, presentation: 'card', gestureEnabled: true, animation: 'slide_from_right' }}
@@ -43,6 +41,14 @@ export default function ProviderLayout() {
       />
       <Stack.Screen
         name="chat"
+        options={{ headerShown: false, presentation: 'card', gestureEnabled: true, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="terms-of-use"
+        options={{ headerShown: false, presentation: 'card', gestureEnabled: true, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="privacy-policy"
         options={{ headerShown: false, presentation: 'card', gestureEnabled: true, animation: 'slide_from_right' }}
       />
     </Stack>

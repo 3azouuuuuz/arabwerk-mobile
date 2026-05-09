@@ -221,9 +221,9 @@ export default function RequestDetailsScreen() {
   };
 
   const getSenderName = (senderId: number): string => {
-    if (senderId === user?.id) return `${user?.firstname} ${user?.lastname}`;
-    const found = usersMap[senderId];
-    if (found) return `${found.firstname} ${found.lastname}`;
+    if (senderId === user?.id) return `${user?.firstname ?? ''} ${user?.lastname ?? ''}`.trim();
+const found = usersMap[senderId];
+if (found) return `${found.firstname ?? ''} ${found.lastname ?? ''}`.trim();
     return `مستخدم #${senderId}`;
   };
 
@@ -823,7 +823,7 @@ export default function RequestDetailsScreen() {
                   </View>
 
                   <Text style={styles.providerName}>
-                    {providerUser ? `${providerUser.firstname} ${providerUser.lastname}` : 'مقدم الخدمة'}
+                    {providerUser ? `${providerUser.firstname ?? ''} ${providerUser.lastname ?? ''}`.trim() : 'مقدم الخدمة'}
                   </Text>
                   {providerProfile?.business_name && (
                     <Text style={styles.providerBusinessName}>{providerProfile.business_name}</Text>

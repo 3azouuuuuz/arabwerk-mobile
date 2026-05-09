@@ -46,26 +46,22 @@ export default function AccountInfoScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Form fields
   const [firstname, setFirstname] = useState('');
   const [lastname, setLastname] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
   const [businessName, setBusinessName] = useState('');
 
-  // City suggestions
   const [citySuggestions, setCitySuggestions] = useState<string[]>([]);
   const [isCitySuggestionsOpen, setIsCitySuggestionsOpen] = useState(false);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
   const cityTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Errors
   const [firstnameError, setFirstnameError] = useState<string | null>(null);
   const [lastnameError, setLastnameError] = useState<string | null>(null);
   const [cityError, setCityError] = useState<string | null>(null);
 
-  // Modal state
   const [modalConfig, setModalConfig] = useState({
     visible: false,
     type: 'success' as 'success' | 'error' | 'warning' | 'info' | 'loading' | 'confirm',
@@ -73,7 +69,6 @@ export default function AccountInfoScreen() {
     title: '',
   });
 
-  // ── Hardware back button ─────────────────────────────────────────────────
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       router.back();
@@ -81,7 +76,6 @@ export default function AccountInfoScreen() {
     });
     return () => backHandler.remove();
   }, [router]);
-  // ────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     fetchProfileData();
@@ -118,7 +112,8 @@ export default function AccountInfoScreen() {
         response = await fetch(`${ENV.API_BASE_URL}/provider_profiles?user_id=${user.id}`);
       }
       if (response?.ok) {
-        const data = await response.json();
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
         const profile = Array.isArray(data) ? data[0] : data;
         setProfileData(profile);
         setFirstname(user.firstname || '');
@@ -245,7 +240,8 @@ export default function AccountInfoScreen() {
         body: JSON.stringify({ firstname: firstname.trim(), lastname: lastname.trim() }),
       });
       if (!userResponse.ok) throw new Error('فشل تحديث بيانات المستخدم');
-      const updatedUser = await userResponse.json();
+      const userText = await userResponse.text();
+      const updatedUser = userText ? JSON.parse(userText) : {};
 
       const profileEndpoint = user.user_type?.id === 1
         ? `${ENV.API_BASE_URL}/user_profiles/${user.id}`
@@ -264,7 +260,8 @@ export default function AccountInfoScreen() {
         body: JSON.stringify(profilePayload),
       });
       if (!profileResponse.ok) throw new Error('فشل تحديث بيانات الملف الشخصي');
-      const updatedProfile = await profileResponse.json();
+      const profileText = await profileResponse.text();
+      const updatedProfile = profileText ? JSON.parse(profileText) : {};
 
       updateUser({ ...updatedUser, phone: phone.trim(), city: selectedCity || '' });
       setProfileData(updatedProfile);
@@ -305,7 +302,6 @@ export default function AccountInfoScreen() {
     >
       <StatusBar style="dark" />
 
-      {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backIcon}>‹</Text>

@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -71,35 +72,16 @@ function getTimeAgo(dateString: string): string {
   return `منذ ${diffDays} يوم`;
 }
 
-// ── Address validity guard ───────────────────────────────────────────────────
-// Returns false for strings that are clearly not geocodable place names:
-// too short, contain newlines/special chars, or are mostly Arabic script
-// (which indicates a service description leaked into the address field).
 function isLikelyPlaceName(address: string): boolean {
   if (!address || address.trim().length < 3) return false;
   if (address.includes('\n') || address.includes('\r')) return false;
-  // If more than 40% of non-space chars are Arabic, treat as description text
   const nonSpace = address.replace(/\s/g, '');
   if (nonSpace.length === 0) return false;
   const arabicChars = (nonSpace.match(/[\u0600-\u06FF]/g) || []).length;
   if (arabicChars / nonSpace.length > 0.4) return false;
   return true;
 }
-// ── Category match using the German part ─────────────────────────────────────
-// Both category and service_type follow the pattern "Arabic - German/German2".
-// We extract the German part (after " - ") and split by "/" to get individual
-// German keywords. A match requires at least one German keyword from the
-// request to appear in the category German keywords (or vice versa).
-// This avoids false positives from shared Arabic words like "تركيب".
-//
-// Examples:
-//   cat:  "نقل أثاث - Transporter/Umzug"          → ["transporter","umzug"]
-//   type: "نقل أثاث - Transporter/Umzug"          → match ✅
-//   type: "تركيب أرضيات - Bodenleger/Fliesenleger" → no overlap   ❌
-//   cat:  "تركيب مطابخ - Küchenaufbau"             → ["küchenaufbau"]
-//   type: "تركيب أرضيات - Bodenleger/Fliesenleger" → no overlap   ❌
-//
-// Fallback: if either side has no German part, use full-string equality.
+
 function extractGermanTokens(str: string): string[] {
   const dashIdx = str.indexOf(' - ');
   if (dashIdx === -1) return [];
@@ -118,51 +100,41 @@ function matchesProviderCategories(
   if (providerCategories.length === 0) return true;
   const typeNorm = serviceType?.trim() ?? '';
   if (!typeNorm) return false;
-
   return providerCategories.some((cat) => {
-    // 1. Exact full-string match (case-insensitive)
     if (typeNorm.toLowerCase() === cat.trim().toLowerCase()) return true;
-
-    // 2. German-token match — primary strategy
     const typeGerman = extractGermanTokens(typeNorm);
     const catGerman  = extractGermanTokens(cat);
-
     if (typeGerman.length > 0 && catGerman.length > 0) {
       return typeGerman.some((tg: string) =>
         catGerman.some((cg: string) => tg === cg || tg.includes(cg) || cg.includes(tg))
       );
     }
-
-    // 3. Fallback: no German part on either side
     return typeNorm.toLowerCase().includes(cat.trim().toLowerCase())
       || cat.trim().toLowerCase().includes(typeNorm.toLowerCase());
   });
 }
-// ────────────────────────────────────────────────────────────────────────────
 
 export default function ProviderDashboard() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const router = useRouter();
-
   const [requests, setRequests] = useState<ServiceRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [providerCity, setProviderCity] = useState<string>('');
   const [radiusKm, setRadiusKm] = useState<number | null>(null);
+  // ✅ Incrementing this forces ProviderHeader to re-run fetchStats
+  const [headerRefreshKey, setHeaderRefreshKey] = useState(0);
 
   const fetchPlanRadius = async (plan: string): Promise<number | null> => {
     try {
-      console.log('📡 Fetching subscription content for plan:', plan);
       const res = await fetch(`${ENV.API_BASE_URL}/subscriptions/content`);
-      if (!res.ok) { console.warn('⚠️ Could not fetch subscription content'); return null; }
+      if (!res.ok) return null;
       const contents: SubscriptionContent[] = await res.json();
       const match = contents.find((c) => c.plan?.toLowerCase() === plan?.toLowerCase());
-      if (!match?.geographic_scope) { console.warn('⚠️ No geographic_scope for plan:', plan); return null; }
+      if (!match?.geographic_scope) return null;
       const radius = parseFloat(match.geographic_scope);
-      console.log(`✅ Plan "${plan}" → radius: ${radius} km`);
       return isNaN(radius) ? null : radius;
-    } catch (e) {
-      console.error('❌ Error fetching plan radius:', e);
+    } catch {
       return null;
     }
   };
@@ -171,13 +143,8 @@ export default function ProviderDashboard() {
     if (!user?.id) return;
     try {
       if (showLoader) setIsLoading(true);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📡 Fetching provider profile for:', user.id);
 
-      // ── 1. Provider profile ──────────────────────────────────────────────
       const profileRes = await fetch(`${ENV.API_BASE_URL}/provider_profiles?user_id=${user.id}`);
-      console.log('📊 Profile status:', profileRes.status);
-
       let providerCityName = '';
       let providerCategories: string[] = [];
       let providerPlan = '';
@@ -194,131 +161,59 @@ export default function ProviderDashboard() {
             .map((c: string) => c.trim())
             .filter(Boolean);
         }
-        console.log('✅ Provider city:', providerCityName);
-        console.log('✅ Provider plan:', providerPlan);
-        console.log('✅ Provider categories:', providerCategories);
       }
 
-      // ── 2. Plan radius ───────────────────────────────────────────────────
       const planRadius = providerPlan ? await fetchPlanRadius(providerPlan) : null;
       setRadiusKm(planRadius);
-      console.log('📏 Geographic radius:', planRadius !== null ? `${planRadius} km` : 'unlimited (fallback)');
 
-      // ── 3. All service requests ──────────────────────────────────────────
-      console.log('📡 Fetching service requests...');
       const requestsRes = await fetch(`${ENV.API_BASE_URL}/service_request`);
-      console.log('📊 Service request status:', requestsRes.status);
       const rawText = await requestsRes.text();
-
-      if (!requestsRes.ok) {
-        console.error('❌ Service request endpoint failed:', requestsRes.status);
-        setRequests([]);
-        return;
-      }
+      if (!requestsRes.ok) { setRequests([]); return; }
 
       let categoryMatched: ServiceRequest[] = [];
       try {
         const parsed: ServiceRequest[] = JSON.parse(rawText);
-
-        // ── 4. Filter: approved + ALL provider categories ─────────────────
         categoryMatched = parsed.filter((r) => {
           if (!r.agree) return false;
           return matchesProviderCategories(r.service_type, providerCategories);
         });
-
-        console.log(
-          `📦 Total: ${parsed.length} | Approved: ${parsed.filter(r => r.agree).length} | Category match: ${categoryMatched.length}`
-        );
-        // Per-category breakdown for debugging
-        providerCategories.forEach((cat) => {
-          const count = categoryMatched.filter(r =>
-            matchesProviderCategories(r.service_type, [cat])
-          ).length;
-          console.log(`   🗂️ "${cat}": ${count} requests`);
-        });
-      } catch (parseErr) {
-        console.error('❌ JSON parse error:', parseErr);
+      } catch {
         setRequests([]);
         return;
       }
 
-      if (categoryMatched.length === 0) {
-        setRequests([]);
-        return;
-      }
+      if (categoryMatched.length === 0) { setRequests([]); return; }
 
-      // ── 5. Geocode provider city ─────────────────────────────────────────
       if (providerCityName) {
-        console.log('📍 Geocoding provider city:', providerCityName);
         const providerCoords = await getCityCoordinates(providerCityName);
-        console.log('📍 Provider coords:', providerCoords);
-
         if (providerCoords) {
-          // ── 6. Geocode each request + distance ───────────────────────────
           const withDistances = await Promise.all(
             categoryMatched.map(async (req) => {
               if (!req.service_address) return { ...req, distance: null };
-              // Skip geocoding if address looks invalid (too short, pure Arabic
-              // text, or clearly not a place name) — keep these requests in.
               if (!isLikelyPlaceName(req.service_address)) return { ...req, distance: null };
               const reqCoords = await getCityCoordinates(req.service_address);
               const distance = reqCoords ? calculateDistance(providerCoords, reqCoords) : null;
               return { ...req, distance };
             })
           );
-
-          // ── 7. Filter by plan radius ─────────────────────────────────────
           const withinRadius = planRadius !== null
             ? withDistances.filter((r) => r.distance === null || r.distance <= planRadius)
             : withDistances;
-
-          console.log(`🔍 Within ${planRadius ?? '∞'} km: ${withinRadius.length} / ${withDistances.length} requests`);
-
-          // ── 8. Sort by distance, top 4 ───────────────────────────────────
           const sorted = withinRadius.sort((a, b) => {
             if (a.distance === null && b.distance === null) return 0;
             if (a.distance === null) return 1;
             if (b.distance === null) return -1;
             return a.distance - b.distance;
           });
-
-          const final = sorted.slice(0, 4);
-
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.log('🗂️ MY CATEGORIES:');
-          providerCategories.forEach((cat, i) => {
-            console.log(`   ${i + 1}. ${cat}`);
-          });
-          console.log('─────────────────────────────────');
-          console.log('📋 REQUESTS BEING SHOWN:');
-          final.forEach((r, i) => {
-            const labels = ['🟢', '🟡', '🟠', '🔴'];
-            console.log(`   ${labels[i] ?? '⚪'} #${i + 1} | Category: "${r.service_type}" | Address: ${r.service_address} | Distance: ${r.distance ?? 'N/A'} km`);
-            console.log(`        Desc: "${r.desc_service?.substring(0, 40)}"`);
-          });
-          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          setRequests(final);
+          setRequests(sorted.slice(0, 4));
           return;
         }
       }
 
-      // ── Fallback: sort by date ───────────────────────────────────────────
       const sorted = categoryMatched.sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
-      const final = sorted.slice(0, 4);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('⚠️ Fallback: no coords, sorted by date');
-      console.log('🗂️ MY CATEGORIES:');
-      providerCategories.forEach((cat, i) => console.log(`   ${i + 1}. ${cat}`));
-      console.log('─────────────────────────────────');
-      console.log('📋 REQUESTS BEING SHOWN:');
-      final.forEach((r, i) => {
-        console.log(`   ⚪ #${i + 1} | Category: "${r.service_type}" | Address: ${r.service_address}`);
-        console.log(`        Desc: "${r.desc_service?.substring(0, 40)}"`);
-      });
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      setRequests(final);
+      setRequests(sorted.slice(0, 4));
     } catch (error) {
       console.error('❌ Error fetching requests:', error);
       setRequests([]);
@@ -328,29 +223,52 @@ export default function ProviderDashboard() {
     }
   }, [user?.id]);
 
-  useEffect(() => { fetchRequests(); }, [fetchRequests]);
+  useEffect(() => {
+    fetchRequests();
+  }, [fetchRequests]);
 
-  const handleRefresh = useCallback(() => {
+  // ✅ On every focus (e.g. returning from payment page), refresh user + header
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser();
+      setHeaderRefreshKey((k) => k + 1);
+      fetchRequests(false);
+    }, [fetchRequests])
+  );
+
+  const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
+    // ✅ On pull-to-refresh: update user data AND re-render header stats
+    await refreshUser();
+    setHeaderRefreshKey((k) => k + 1);
     fetchRequests(false);
   }, [fetchRequests]);
 
   return (
     <View style={styles.screen}>
-      <ProviderHeader />
+      {/* ✅ refreshKey causes header to re-fetch plan/stats when it changes */}
+      <ProviderHeader refreshKey={headerRefreshKey} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#2F6FDB']} tintColor="#2F6FDB" />
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#2F6FDB']}
+            tintColor="#2F6FDB"
+          />
         }
       >
         <View style={styles.sectionHeader}>
-          <TouchableOpacity style={styles.viewAllButton}>
-            <Text style={styles.viewAllText}>عرض الكل</Text>
-            <Ionicons name="chevron-back" size={wp(4)} color="#2F6FDB" />
-          </TouchableOpacity>
+          <TouchableOpacity
+  style={styles.viewAllButton}
+  onPress={() => router.push('/(provider)/(tabs)/requests')}
+>
+  <Text style={styles.viewAllText}>عرض الكل</Text>
+  <Ionicons name="chevron-back" size={wp(4)} color="#2F6FDB" />
+</TouchableOpacity>
           <Text style={styles.sectionTitle}>
             {providerCity ? `طلبات قريبة من ${providerCity}` : 'طلبات جديدة في منطقتك'}
           </Text>

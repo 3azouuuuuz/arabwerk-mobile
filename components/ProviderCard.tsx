@@ -66,7 +66,7 @@ export default function ProviderCard({
         )}
 
         {/* Pro Badge */}
-        {provider.provider_plan === 'Pro' && (
+        {['pro', 'Pro', 'PRO', 'premium', 'Premium', 'PREMIUM'].includes(provider.provider_plan?.trim() || '') && (
           <View style={styles.proBadge}>
             <FontAwesome name="star" size={12} color="#FFFFFF" />
           </View>

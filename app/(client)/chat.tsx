@@ -60,12 +60,16 @@ export default function ChatScreen() {
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
   const [ratingSuccess, setRatingSuccess] = useState(false);
 
+  // ✅ True only if the provider has sent at least one message back
+  const providerHasReplied = messages.some(
+    (m) => m.sender_id === Number(receiverId)
+  );
+
   const authHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  // ── Hardware back button ─────────────────────────────────────────────────
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       router.back();
@@ -73,9 +77,7 @@ export default function ChatScreen() {
     });
     return () => backHandler.remove();
   }, [router]);
-  // ────────────────────────────────────────────────────────────────────────
 
-  // ── Keyboard listeners ───────────────────────────────────────────────────
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -90,7 +92,6 @@ export default function ChatScreen() {
     const hideSub = Keyboard.addListener(hideEvent, onHide);
     return () => { showSub.remove(); hideSub.remove(); };
   }, []);
-  // ────────────────────────────────────────────────────────────────────────
 
   const markMessagesAsRead = useCallback(async () => {
     if (!receiverId || !token) return;
@@ -125,7 +126,10 @@ export default function ChatScreen() {
   const fetchMessages = useCallback(async () => {
     if (!user?.id || !receiverId) return;
     try {
-      const res = await fetch(`${ENV.API_BASE_URL}/messages?withUser=${receiverId}`, { headers: authHeaders });
+      const res = await fetch(
+        `${ENV.API_BASE_URL}/messages?withUser=${receiverId}`,
+        { headers: authHeaders }
+      );
       if (res.ok) {
         const data: Message[] = await res.json();
         setMessages(data);
@@ -244,6 +248,8 @@ export default function ChatScreen() {
   };
 
   const openRatingModal = () => {
+    // ✅ Guard: do nothing if provider hasn't replied yet
+    if (!providerHasReplied) return;
     setSelectedStars(currentRating || 0);
     setRatingSuccess(false);
     setRatingModalVisible(true);
@@ -331,7 +337,9 @@ export default function ChatScreen() {
     );
   };
 
-  const receiverName = receiver ? `${receiver.firstname} ${receiver.lastname}` : 'Loading...';
+  const receiverName = receiver
+    ? `${receiver.firstname ?? ''} ${receiver.lastname ?? ''}`.trim()
+    : 'Loading...';
   const HEADER_HEIGHT = hp(6) + hp(1.5) + wp(10);
 
   return (
@@ -369,18 +377,42 @@ export default function ChatScreen() {
           </View>
         </View>
 
+        {/* ✅ Rating button: greyed out with tooltip hint when provider hasn't replied */}
         <Pressable
-          style={({ pressed }) => [styles.ratingBtn, pressed && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.ratingBtn,
+            !providerHasReplied && styles.ratingBtnDisabled,
+            pressed && providerHasReplied && { opacity: 0.6 },
+          ]}
           onPress={openRatingModal}
+          disabled={!providerHasReplied}
         >
           <Ionicons
             name={currentRating > 0 ? 'star' : 'star-outline'}
             size={wp(5.5)}
-            color={currentRating > 0 ? '#F59E0B' : '#9CA3AF'}
+            color={
+              !providerHasReplied
+                ? '#D1D5DB'
+                : currentRating > 0
+                ? '#F59E0B'
+                : '#9CA3AF'
+            }
           />
-          {currentRating > 0 && <Text style={styles.ratingBtnText}>{currentRating}</Text>}
+          {currentRating > 0 && providerHasReplied && (
+            <Text style={styles.ratingBtnText}>{currentRating}</Text>
+          )}
         </Pressable>
       </View>
+
+      {/* ✅ Subtle hint shown until provider replies */}
+      {!providerHasReplied && !isLoading && messages.length > 0 && (
+        <View style={styles.ratingHintBanner}>
+          <Ionicons name="information-circle-outline" size={wp(4)} color="#6B7280" />
+          <Text style={styles.ratingHintText}>
+            You can rate the provider once they reply
+          </Text>
+        </View>
+      )}
 
       {/* ── Messages ── */}
       {isLoading ? (
@@ -394,7 +426,9 @@ export default function ChatScreen() {
             <Ionicons name="chatbubble-ellipses-outline" size={wp(14)} color="#CBD5E1" />
           </View>
           <Text style={styles.emptyTitle}>No messages yet</Text>
-          <Text style={styles.emptySubtitle}>Say hello to {receiver?.firstname || 'them'}!</Text>
+          <Text style={styles.emptySubtitle}>
+            Say hello to {receiver?.firstname || 'them'}!
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -474,7 +508,10 @@ export default function ChatScreen() {
                     <Text style={styles.modalTitle}>Rate Provider</Text>
                     <Text style={styles.modalSubtitle}>{receiverName}</Text>
                   </View>
-                  <Pressable style={styles.modalCloseBtn} onPress={() => setRatingModalVisible(false)}>
+                  <Pressable
+                    style={styles.modalCloseBtn}
+                    onPress={() => setRatingModalVisible(false)}
+                  >
                     <Ionicons name="close" size={wp(5)} color="#9CA3AF" />
                   </Pressable>
                 </View>
@@ -495,7 +532,10 @@ export default function ChatScreen() {
                     <Pressable
                       key={star}
                       onPress={() => setSelectedStars(star)}
-                      style={({ pressed }) => [styles.starBtn, pressed && { transform: [{ scale: 1.2 }] }]}
+                      style={({ pressed }) => [
+                        styles.starBtn,
+                        pressed && { transform: [{ scale: 1.2 }] },
+                      ]}
                     >
                       <Ionicons
                         name={star <= selectedStars ? 'star' : 'star-outline'}
@@ -555,7 +595,10 @@ const styles = StyleSheet.create({
     width: wp(10), height: wp(10), borderRadius: wp(5),
     backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center',
   },
-  headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: wp(1) },
+  headerCenter: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: wp(1),
+  },
   headerAvatarWrap: { position: 'relative' },
   headerAvatar: {
     width: wp(10), height: wp(10), borderRadius: wp(5),
@@ -576,7 +619,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFBEB', justifyContent: 'center', alignItems: 'center',
     borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', gap: wp(0.5),
   },
+  // ✅ Greyed out state when provider hasn't replied
+  ratingBtnDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
   ratingBtnText: { fontSize: wp(3.2), fontWeight: '700', color: '#D97706' },
+
+  // ✅ Hint banner
+  ratingHintBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: wp(2),
+    backgroundColor: '#F9FAFB', borderBottomWidth: 1, borderBottomColor: '#E5E7EB',
+    paddingHorizontal: wp(4), paddingVertical: hp(1),
+  },
+  ratingHintText: { fontSize: wp(3.2), color: '#6B7280', flex: 1 },
 
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: hp(1.5) },
   loadingText: { fontSize: wp(3.8), color: '#6B7280' },
@@ -592,7 +648,10 @@ const styles = StyleSheet.create({
   emptySubtitle: { fontSize: wp(3.8), color: '#9CA3AF', textAlign: 'center' },
 
   messagesList: { paddingHorizontal: wp(4), paddingVertical: hp(2), paddingBottom: hp(3) },
-  dateSeparator: { flexDirection: 'row', alignItems: 'center', marginVertical: hp(2), gap: wp(3) },
+  dateSeparator: {
+    flexDirection: 'row', alignItems: 'center',
+    marginVertical: hp(2), gap: wp(3),
+  },
   dateSepLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
   dateSepText: { fontSize: wp(3), color: '#94A3B8', fontWeight: '600', paddingHorizontal: wp(1) },
 
@@ -617,7 +676,10 @@ const styles = StyleSheet.create({
   bubbleText: { fontSize: wp(3.9), lineHeight: hp(2.7) },
   bubbleTextMe: { color: '#FFFFFF' },
   bubbleTextThem: { color: '#1F2937' },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: wp(1), marginTop: hp(0.4), paddingHorizontal: wp(1) },
+  metaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: wp(1),
+    marginTop: hp(0.4), paddingHorizontal: wp(1),
+  },
   metaRowMe: { justifyContent: 'flex-end' },
   metaRowThem: { justifyContent: 'flex-start' },
   metaTime: { fontSize: wp(2.8), color: '#9CA3AF' },
@@ -671,16 +733,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: wp(3), paddingVertical: hp(1), marginBottom: hp(2),
   },
   existingRatingHintText: { fontSize: wp(3.2), color: '#2F6FDB', flex: 1 },
-  ratingPrompt: { fontSize: wp(4), fontWeight: '600', color: '#374151', textAlign: 'center', marginBottom: hp(2) },
+  ratingPrompt: {
+    fontSize: wp(4), fontWeight: '600', color: '#374151',
+    textAlign: 'center', marginBottom: hp(2),
+  },
   starsRow: { flexDirection: 'row', justifyContent: 'center', gap: wp(2), marginBottom: hp(1.5) },
   starBtn: { padding: wp(1) },
-  starLabel: { fontSize: wp(4), fontWeight: '700', color: '#F59E0B', textAlign: 'center', height: hp(3), marginBottom: hp(3) },
+  starLabel: {
+    fontSize: wp(4), fontWeight: '700', color: '#F59E0B',
+    textAlign: 'center', height: hp(3), marginBottom: hp(3),
+  },
   submitBtn: {
-    backgroundColor: '#2F6FDB', borderRadius: 14, paddingVertical: hp(1.8), alignItems: 'center',
+    backgroundColor: '#2F6FDB', borderRadius: 14,
+    paddingVertical: hp(1.8), alignItems: 'center',
     shadowColor: '#2F6FDB', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
   },
-  submitBtnDisabled: { backgroundColor: '#E5E7EB', shadowOpacity: 0, elevation: 0 },
+  submitBtnDisabled: { backgroundColor: '#E5E7E8', shadowOpacity: 0, elevation: 0 },
   submitBtnText: { fontSize: wp(4.2), fontWeight: '700', color: '#FFFFFF' },
   successContainer: { alignItems: 'center', paddingVertical: hp(3), gap: hp(1.5) },
   successIcon: { marginBottom: hp(1) },

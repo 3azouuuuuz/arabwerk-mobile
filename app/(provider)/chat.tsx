@@ -336,7 +336,7 @@ export default function ChatScreen() {
   };
 
   const receiverName = receiver
-    ? `${receiver.firstname} ${receiver.lastname}`
+    ? `${receiver.firstname ?? ''} ${receiver.lastname ?? ''}`.trim()
     : 'Loading...';
 
   const HEADER_HEIGHT = hp(6) + hp(1.5) + wp(10);

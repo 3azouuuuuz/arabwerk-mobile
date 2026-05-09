@@ -3,6 +3,7 @@ import { CardField, useStripe } from '@stripe/stripe-react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useState } from 'react';
 import {
   BackHandler,
@@ -15,6 +16,7 @@ import {
   View,
 } from 'react-native';
 import CustomModal from '../../components/CustomModal';
+import PaymentMethodModal from '../../components/PaymentMethodModal';
 import { ENV } from '../../config/env';
 import { useAuth } from '../../context/AuthContext';
 import { hp, wp } from '../../helpers/common';
@@ -75,6 +77,7 @@ export default function UpgradeSubscriptionScreen() {
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [cardComplete, setCardComplete] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'info' | 'loading' | 'confirm'>('info');
@@ -82,7 +85,6 @@ export default function UpgradeSubscriptionScreen() {
   const [modalMessage, setModalMessage] = useState('');
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
-  // ── Hardware back button ──────────────────────────────────────────────────
   useEffect(() => {
     const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
       router.back();
@@ -90,7 +92,6 @@ export default function UpgradeSubscriptionScreen() {
     });
     return () => backHandler.remove();
   }, [router]);
-  // ─────────────────────────────────────────────────────────────────────────
 
   const showModal = (
     type: typeof modalType,
@@ -123,7 +124,7 @@ export default function UpgradeSubscriptionScreen() {
         () => activateFreePlan(),
       );
     } else {
-      setShowPaymentModal(true);
+      setShowPaymentMethodModal(true);
     }
   }, [selectedPlan]);
 
@@ -147,6 +148,11 @@ export default function UpgradeSubscriptionScreen() {
     } catch (error) {
       showModal('error', 'Failed', error.message || 'Failed to activate free plan. Please try again.');
     }
+  };
+
+  // ── Stripe Payment ────────────────────────────────────────────────────────
+  const handleStripePayment = () => {
+    setShowPaymentModal(true);
   };
 
   const handlePaymentSubmit = async () => {
@@ -177,6 +183,61 @@ export default function UpgradeSubscriptionScreen() {
       setTimeout(() => { setModalVisible(false); router.back(); }, 2500);
     } catch (error) {
       showModal('error', 'Payment Failed', error.message || 'Failed to process payment. Please try again.');
+    }
+  };
+
+  // ── PayPal Payment ────────────────────────────────────────────────────────
+  const handlePayPalPayment = async () => {
+    showModal('loading', 'Preparing', 'Opening PayPal...');
+
+    try {
+      const returnUrl = `${ENV.API_BASE_URL}/paypal/success`;
+      const cancelUrl = `${ENV.API_BASE_URL}/paypal/cancel`;
+
+      const response = await fetch(`${ENV.API_BASE_URL}/paypal/create-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          returnUrl,
+          cancelUrl,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'Failed to create PayPal subscription');
+
+      const { subscriptionId, approvalUrl } = data;
+
+      setModalVisible(false);
+
+      const result = await WebBrowser.openAuthSessionAsync(approvalUrl, 'arabwerkmobile://paypal-return');
+
+      if (result.type === 'success') {
+        showModal('loading', 'Activating', 'Activating your subscription...');
+
+        const activateResponse = await fetch(`${ENV.API_BASE_URL}/paypal/activate-subscription`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            subscriptionId,
+          }),
+        });
+
+        const activateData = await activateResponse.json();
+        if (!activateResponse.ok) throw new Error(activateData.message || 'Failed to activate PayPal subscription');
+
+        await SecureStore.deleteItemAsync('needs_subscription');
+
+        showModal('success', 'Welcome to Pro! 🎉', 'Your Pro subscription via PayPal is now active!');
+        setTimeout(() => { setModalVisible(false); router.back(); }, 2500);
+
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        showModal('warning', 'Cancelled', 'PayPal payment was not completed. You can try again.');
+      }
+    } catch (error) {
+      showModal('error', 'Payment Failed', error.message || 'Failed to process PayPal payment. Please try again.');
     }
   };
 
@@ -299,7 +360,15 @@ export default function UpgradeSubscriptionScreen() {
         </View>
       </ScrollView>
 
-      {/* Payment Modal */}
+      {/* Payment Method Modal */}
+      <PaymentMethodModal
+        visible={showPaymentMethodModal}
+        onStripePress={handleStripePayment}
+        onPayPalPress={handlePayPalPayment}
+        onClose={() => setShowPaymentMethodModal(false)}
+      />
+
+      {/* Stripe Card Payment Modal */}
       <CustomModal
         visible={showPaymentModal}
         type="info"
@@ -320,7 +389,6 @@ export default function UpgradeSubscriptionScreen() {
               style={styles.cardField}
               onCardChange={(cardDetails) => setCardComplete(cardDetails.complete)}
             />
-            <Text style={styles.testCardNote}>💳 Test card: 4242 4242 4242 4242</Text>
           </View>
         </TouchableWithoutFeedback>
       </CustomModal>

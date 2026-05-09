@@ -14,7 +14,11 @@ interface ProviderStats {
   plan: string;
 }
 
-export default function ProviderHeader() {
+interface ProviderHeaderProps {
+  refreshKey?: number;
+}
+
+export default function ProviderHeader({ refreshKey = 0 }: ProviderHeaderProps) {
   const router = useRouter();
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
@@ -64,22 +68,21 @@ export default function ProviderHeader() {
     }
   }, [user?.id]);
 
+  // ✅ Re-fetch whenever refreshKey changes (focus or pull-to-refresh)
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
-
-  const handleNotificationPress = () => {
-    router.push('/(provider)/notifications');
-  };
+  }, [fetchStats, refreshKey]);
 
   const isPro = stats.plan === 'pro';
 
   return (
     <View style={[styles.wrapper, !isPro && { marginBottom: SUBSCRIPTION_CARD_HEIGHT / 2 }]}>
       <View style={styles.container}>
-        {/* Top Row */}
         <View style={styles.topRow}>
-          <TouchableOpacity style={styles.iconButton} onPress={handleNotificationPress}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => router.push('/(provider)/notifications')}
+          >
             <Ionicons name="notifications-outline" size={wp(6)} color="#FFFFFF" />
             {unreadCount > 0 && (
               <View style={styles.notificationBadge}>
@@ -104,7 +107,6 @@ export default function ProviderHeader() {
           />
         </View>
 
-        {/* Stats Row */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Ionicons name="star-outline" size={wp(5)} color="#FFFFFF" />
@@ -124,7 +126,6 @@ export default function ProviderHeader() {
         <View style={!isPro ? styles.bottomPadding : styles.bottomPaddingPro} />
       </View>
 
-      {/* Floating Subscription Row — only for free plan */}
       {!isPro && (
         <View style={styles.subscriptionRow}>
           <Pressable
@@ -149,10 +150,7 @@ export default function ProviderHeader() {
 const SUBSCRIPTION_CARD_HEIGHT = hp(10.5);
 
 const styles = StyleSheet.create({
-  wrapper: {
-    position: 'relative',
-    zIndex: 10,
-  },
+  wrapper: { position: 'relative', zIndex: 10 },
   container: {
     backgroundColor: '#2F6FDB',
     paddingHorizontal: wp(5),
@@ -161,139 +159,52 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 50,
   },
   topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: hp(3),
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'space-between', marginBottom: hp(3),
   },
   iconButton: {
-    width: wp(10),
-    height: wp(10),
-    borderRadius: wp(5),
+    width: wp(10), height: wp(10), borderRadius: wp(5),
     backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
   },
   notificationBadge: {
-    position: 'absolute',
-    top: wp(1),
-    right: wp(1),
-    minWidth: wp(4.5),
-    height: wp(4.5),
-    borderRadius: wp(2.25),
-    backgroundColor: '#EF4444',
-    borderWidth: 1.5,
-    borderColor: '#2F6FDB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: wp(0.8),
+    position: 'absolute', top: wp(1), right: wp(1),
+    minWidth: wp(4.5), height: wp(4.5), borderRadius: wp(2.25),
+    backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#2F6FDB',
+    justifyContent: 'center', alignItems: 'center', paddingHorizontal: wp(0.8),
   },
-  notificationBadgeText: {
-    fontSize: wp(2.2),
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  nameContainer: {
-    alignItems: 'center',
-  },
-  greeting: {
-    fontSize: wp(3),
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '500',
-  },
-  name: {
-    fontSize: wp(5.5),
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  logo: {
-    width: wp(15),
-    height: wp(15),
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: wp(3),
-  },
+  notificationBadgeText: { fontSize: wp(2.2), fontWeight: '700', color: '#FFFFFF' },
+  nameContainer: { alignItems: 'center' },
+  greeting: { fontSize: wp(3), color: 'rgba(255,255,255,0.75)', fontWeight: '500' },
+  name: { fontSize: wp(5.5), color: '#FFFFFF', fontWeight: '800' },
+  logo: { width: wp(15), height: wp(15) },
+  statsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: wp(3) },
   statCard: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
-    paddingVertical: hp(1.8),
-    paddingHorizontal: wp(2),
-    gap: hp(0.5),
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 12,
+    paddingVertical: hp(1.8), paddingHorizontal: wp(2), gap: hp(0.5),
   },
-  statValue: {
-    fontSize: wp(5),
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  statLabel: {
-    fontSize: wp(2.8),
-    color: 'rgba(255,255,255,0.8)',
-    textAlign: 'center',
-    fontWeight: '500',
-  },
-  bottomPadding: {
-    height: SUBSCRIPTION_CARD_HEIGHT / 2 + hp(2.5),
-  },
-  bottomPaddingPro: {
-    height: hp(2.5),
-  },
+  statValue: { fontSize: wp(5), fontWeight: '800', color: '#FFFFFF' },
+  statLabel: { fontSize: wp(2.8), color: 'rgba(255,255,255,0.8)', textAlign: 'center', fontWeight: '500' },
+  bottomPadding: { height: SUBSCRIPTION_CARD_HEIGHT / 2 + hp(2.5) },
+  bottomPaddingPro: { height: hp(2.5) },
   subscriptionRow: {
-    position: 'absolute',
-    bottom: -(SUBSCRIPTION_CARD_HEIGHT / 2),
-    left: wp(5),
-    right: wp(5),
-    height: SUBSCRIPTION_CARD_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 35,
-    paddingHorizontal: wp(5),
-    zIndex: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 8,
+    position: 'absolute', bottom: -(SUBSCRIPTION_CARD_HEIGHT / 2),
+    left: wp(5), right: wp(5), height: SUBSCRIPTION_CARD_HEIGHT,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF', borderRadius: 35, paddingHorizontal: wp(5),
+    zIndex: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08, shadowRadius: 10, elevation: 8,
   },
-  subscriptionInfo: {
-    alignItems: 'flex-end',
-  },
-  subscriptionLabel: {
-    fontSize: wp(2.8),
-    color: '#9CA3AF',
-    fontWeight: '500',
-  },
-  subscriptionValue: {
-    fontSize: wp(3.8),
-    color: '#1F2937',
-    fontWeight: '700',
-  },
+  subscriptionInfo: { alignItems: 'flex-end' },
+  subscriptionLabel: { fontSize: wp(2.8), color: '#9CA3AF', fontWeight: '500' },
+  subscriptionValue: { fontSize: wp(3.8), color: '#1F2937', fontWeight: '700' },
   upgradeButton: {
-    backgroundColor: '#2F6FDB',
-    paddingVertical: hp(1.2),
-    paddingHorizontal: wp(5),
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 10,
+    backgroundColor: '#2F6FDB', paddingVertical: hp(1.2), paddingHorizontal: wp(5),
+    borderRadius: 16, alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 10,
   },
-  upgradeButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.96 }],
-  },
-  upgradeText: {
-    fontSize: wp(3.5),
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
+  upgradeButtonPressed: { opacity: 0.8, transform: [{ scale: 0.96 }] },
+  upgradeText: { fontSize: wp(3.5), color: '#FFFFFF', fontWeight: '700' },
 });

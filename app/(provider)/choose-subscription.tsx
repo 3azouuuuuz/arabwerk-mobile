@@ -2,6 +2,7 @@ import { CardField, useStripe } from '@stripe/stripe-react-native';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import { StatusBar } from 'expo-status-bar';
+import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useEffect, useState } from 'react';
 import {
   BackHandler,
@@ -14,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import CustomModal from '../../components/CustomModal';
+import PaymentMethodModal from '../../components/PaymentMethodModal';
 import ProviderSetupProgress from '../../components/ProviderSetupProgress';
 import Template from '../../components/Template';
 import { ENV } from '../../config/env';
@@ -81,6 +83,7 @@ export default function ChooseSubscription() {
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
 
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showPaymentMethodModal, setShowPaymentMethodModal] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
 
   useEffect(() => {
@@ -122,7 +125,7 @@ export default function ChooseSubscription() {
         setPendingAction(() => () => activateFreePlan());
         setModalVisible(true);
       } else {
-        setShowPaymentModal(true);
+        setShowPaymentMethodModal(true);
       }
     }
   }, [selectedPlan]);
@@ -165,6 +168,11 @@ export default function ChooseSubscription() {
       setModalMessage(error.message || 'فشل تفعيل الخطة المجانية. يرجى المحاولة مجدداً.');
       setModalVisible(true);
     }
+  };
+
+  // ── Stripe Payment ────────────────────────────────────────────────────────
+  const handleStripePayment = () => {
+    setShowPaymentModal(true);
   };
 
   const handlePaymentSubmit = async () => {
@@ -219,6 +227,80 @@ export default function ChooseSubscription() {
       setModalType('error');
       setModalTitle('فشل الدفع');
       setModalMessage(error.message || 'فشل معالجة الدفع. يرجى المحاولة مجدداً.');
+      setModalVisible(true);
+    }
+  };
+
+  // ── PayPal Payment ────────────────────────────────────────────────────────
+  const handlePayPalPayment = async () => {
+    setModalType('loading');
+    setModalTitle('جاري التحضير');
+    setModalMessage('جاري فتح صفحة PayPal...');
+    setModalVisible(true);
+
+    try {
+      const returnUrl = `${ENV.API_BASE_URL}/paypal/success`;
+      const cancelUrl = `${ENV.API_BASE_URL}/paypal/cancel`;
+
+      const response = await fetch(`${ENV.API_BASE_URL}/paypal/create-subscription`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          returnUrl,
+          cancelUrl,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'فشل إنشاء اشتراك PayPal');
+
+      const { subscriptionId, approvalUrl } = data;
+
+      setModalVisible(false);
+
+      const result = await WebBrowser.openAuthSessionAsync(approvalUrl, 'arabwerkmobile://paypal-return');
+
+      if (result.type === 'success') {
+        setModalType('loading');
+        setModalTitle('جاري التفعيل');
+        setModalMessage('جاري تفعيل اشتراكك...');
+        setModalVisible(true);
+
+        const activateResponse = await fetch(`${ENV.API_BASE_URL}/paypal/activate-subscription`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            subscriptionId,
+          }),
+        });
+
+        const activateData = await activateResponse.json();
+        if (!activateResponse.ok) throw new Error(activateData.message || 'فشل تفعيل اشتراك PayPal');
+
+        await SecureStore.deleteItemAsync('needs_subscription');
+
+        setModalType('success');
+        setModalTitle('مرحباً بك في Pro! 🎉');
+        setModalMessage('اشتراكك الاحترافي عبر PayPal نشط الآن. لنقم بإعداد نشاطك التجاري!');
+        setModalVisible(true);
+
+        setTimeout(() => {
+          setModalVisible(false);
+          router.replace('/(provider)/provider-setup');
+        }, 2500);
+      } else if (result.type === 'cancel' || result.type === 'dismiss') {
+        setModalType('warning');
+        setModalTitle('تم الإلغاء');
+        setModalMessage('لم يتم إتمام عملية الدفع عبر PayPal. يمكنك المحاولة مجدداً.');
+        setModalVisible(true);
+      }
+    } catch (error) {
+      console.error('PayPal payment error:', error);
+      setModalType('error');
+      setModalTitle('فشل الدفع');
+      setModalMessage(error.message || 'فشل معالجة الدفع عبر PayPal. يرجى المحاولة مجدداً.');
       setModalVisible(true);
     }
   };
@@ -345,7 +427,6 @@ export default function ChooseSubscription() {
                   </View>
                 )}
 
-                {/* مميزات الخطة - RTL: أيقونة يمين، نص يسار */}
                 <View style={styles.planFeatures}>
                   {plan.features.map((feature, index) => (
                     <View key={index} style={styles.featureRow}>
@@ -418,7 +499,15 @@ export default function ChooseSubscription() {
         </View>
       </ScrollView>
 
-      {/* مودال الدفع */}
+      {/* مودال اختيار طريقة الدفع */}
+      <PaymentMethodModal
+        visible={showPaymentMethodModal}
+        onStripePress={handleStripePayment}
+        onPayPalPress={handlePayPalPayment}
+        onClose={() => setShowPaymentMethodModal(false)}
+      />
+
+      {/* مودال الدفع بالبطاقة */}
       <CustomModal
         visible={showPaymentModal}
         type="info"
@@ -442,7 +531,6 @@ export default function ChooseSubscription() {
               }}
             />
             <Text style={styles.testCardNote}>
-              💳 بطاقة تجريبية: 4242 4242 4242 4242
             </Text>
           </View>
         </TouchableWithoutFeedback>

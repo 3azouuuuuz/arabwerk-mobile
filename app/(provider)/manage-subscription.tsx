@@ -22,6 +22,7 @@ interface SubscriptionStatus {
   subscription_end_date: string | null;
   plan: string;
   plan_name: string;
+  subscription_provider?: string;
 }
 
 interface Invoice {
@@ -108,11 +109,20 @@ export default function ManageSubscriptionScreen() {
     if (!user?.id) return;
     setIsLoading(true);
     try {
-      const [subRes, invoicesRes] = await Promise.all([
-        fetch(`${ENV.API_BASE_URL}/provider_profiles/subscription-status/${user.id}`),
-        fetch(`${ENV.API_BASE_URL}/stripe-payment/invoices/${user.id}`),
-      ]);
-      if (subRes.ok) setSubscription(await subRes.json());
+      const subRes = await fetch(`${ENV.API_BASE_URL}/provider_profiles/subscription-status/${user.id}`);
+      let subData: SubscriptionStatus | null = null;
+      if (subRes.ok) {
+        subData = await subRes.json();
+        setSubscription(subData);
+      }
+
+      // ── Fetch invoices based on provider ──────────────────────────────────
+      const provider = subData?.subscription_provider;
+      const invoicesEndpoint = provider === 'paypal'
+        ? `${ENV.API_BASE_URL}/paypal/transactions/${user.id}`
+        : `${ENV.API_BASE_URL}/stripe-payment/invoices/${user.id}`;
+
+      const invoicesRes = await fetch(invoicesEndpoint);
       if (invoicesRes.ok) {
         const data = await invoicesRes.json();
         setInvoices(Array.isArray(data) ? data : []);
@@ -140,11 +150,18 @@ export default function ManageSubscriptionScreen() {
     if (!user?.id) return;
     setIsCancelling(true);
     try {
-      const res = await fetch(`${ENV.API_BASE_URL}/stripe-payment/cancel-subscription`, {
+      // ── Route to correct cancel endpoint based on provider ────────────────
+      const provider = subscription?.subscription_provider;
+      const cancelEndpoint = provider === 'paypal'
+        ? `${ENV.API_BASE_URL}/paypal/cancel-subscription`
+        : `${ENV.API_BASE_URL}/stripe-payment/cancel-subscription`;
+
+      const res = await fetch(cancelEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id }),
       });
+
       if (res.ok) {
         showModal(
           'success',
@@ -224,18 +241,20 @@ export default function ManageSubscriptionScreen() {
           <View style={[styles.planCard, isPro && isActive && styles.planCardPro]}>
             <View style={[styles.planCardAccent, { backgroundColor: isPro && isActive ? '#F59E0B' : '#E5E7EB' }]} />
             <View style={styles.planCardBody}>
-              <View style={[styles.statusPill, { backgroundColor: isActive ? '#ECFDF5' : '#FEF2F2' }]}>
-                <View style={[styles.statusDot, { backgroundColor: isActive ? '#10B981' : '#EF4444' }]} />
-                <Text style={[styles.statusPillText, { color: isActive ? '#059669' : '#DC2626' }]}>
-                  {isActive ? 'نشط' : 'غير نشط'}
-                </Text>
+              <View style={styles.planLeft}>
+                <View style={[styles.statusPill, { backgroundColor: isActive ? '#ECFDF5' : '#FEF2F2' }]}>
+                  <View style={[styles.statusDot, { backgroundColor: isActive ? '#10B981' : '#EF4444' }]} />
+                  <Text style={[styles.statusPillText, { color: isActive ? '#059669' : '#DC2626' }]}>
+                    {isActive ? 'نشط' : 'غير نشط'}
+                  </Text>
+                </View>
+                {/* Provider badge */}
+             
               </View>
               <View style={styles.planRight}>
                 <Text style={styles.planLabel}>باقتك الحالية</Text>
                 <Text style={[styles.planName, isPro && isActive && styles.planNamePro]}>
-                  {isPro
-                    ? 'الخطة المدفوعة - € 15/شهر'
-                    : 'الخطة المجانية'}
+                  {isPro ? 'الخطة المدفوعة - € 15/شهر' : 'الخطة المجانية'}
                 </Text>
                 {isPro && (
                   <Text style={styles.planScope}>نطاق جغرافي: 200 كم</Text>
@@ -361,7 +380,7 @@ export default function ManageSubscriptionScreen() {
                     <View>
                       <Text style={styles.invoiceDate}>{formatDate(invoice.created)}</Text>
                       <Text style={styles.invoicePeriod}>
-                        {formatDate(invoice.period_start)} — {formatDate(invoice.period_end)}
+                        {formatDate(invoice.period_start)} — {invoice.period_end ? formatDate(invoice.period_end) : '—'}
                       </Text>
                     </View>
                     <View style={[styles.invoiceIconWrap, { backgroundColor: getStatusColor(invoice.status) + '20' }]}>
@@ -423,6 +442,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
     padding: wp(5),
   },
+  planLeft: { alignItems: 'flex-start', gap: hp(1) },
   planRight: { flex: 1, alignItems: 'flex-end' },
   planLabel: { fontSize: wp(3.2), color: '#9CA3AF', marginBottom: hp(0.4), textAlign: 'right' },
   planName: { fontSize: wp(5), fontWeight: '800', color: '#1F2937', marginBottom: hp(0.5), textAlign: 'right' },
@@ -435,6 +455,10 @@ const styles = StyleSheet.create({
   },
   statusDot: { width: wp(2), height: wp(2), borderRadius: wp(1) },
   statusPillText: { fontSize: wp(3.2), fontWeight: '700' },
+  providerBadge: {
+    paddingHorizontal: wp(3), paddingVertical: hp(0.5), borderRadius: 20,
+  },
+  providerBadgeText: { fontSize: wp(3), fontWeight: '700', color: '#FFFFFF' },
 
   upgradeBtn: {
     backgroundColor: '#2F6FDB', borderRadius: 14, paddingVertical: hp(2),

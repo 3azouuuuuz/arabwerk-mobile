@@ -117,7 +117,7 @@ export default function Conversations() {
           const diffMinutes = (Date.now() - new Date(u.last_online).getTime()) / 60000;
           return {
             id: u.id,
-            name: `${u.firstname} ${u.lastname}`,
+            name: `${u.firstname ?? ''} ${u.lastname ?? ''}`.trim(),
             lastMessage: lastMsg.message,
             lastMessageTime: lastMsg.timestamp,
             unreadCount: unreadCounts.get(u.id) || 0,

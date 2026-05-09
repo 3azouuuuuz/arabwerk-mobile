@@ -53,7 +53,6 @@ export default function ProfileScreen() {
   const [completedRequestsCount, setCompletedRequestsCount] = useState(0);
   const [conversationsCount] = useState(0);
 
-  // ── Modal state ──────────────────────────────────────────────────────────────
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState<'success' | 'error' | 'warning' | 'confirm'>('confirm');
   const [modalTitle, setModalTitle] = useState('');
@@ -81,7 +80,6 @@ export default function ProfileScreen() {
     setModalOnSecondary(() => onSecondary);
     setModalVisible(true);
   };
-  // ────────────────────────────────────────────────────────────────────────────
 
   const handleNotificationPress = useCallback(() => {
     console.log('🔔 Notifications pressed');
@@ -91,29 +89,29 @@ export default function ProfileScreen() {
     if (!user?.id) return;
     try {
       if (showLoader) setIsLoading(true);
+
       let response;
       if (user.user_type?.id === 1) {
         response = await fetch(`${ENV.API_BASE_URL}/user_profiles?user_id=${user.id}`);
       } else if (user.user_type?.id === 2) {
         response = await fetch(`${ENV.API_BASE_URL}/provider_profiles?user_id=${user.id}`);
       }
-      if (response?.ok) {
-        const data = await response.json();
-        const profile = Array.isArray(data) ? data[0] : data;
 
-        // ── Fallback to SecureStore if client location is empty ────────────
+      if (response?.ok) {
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        const profile = Array.isArray(data) ? data[0] : data;
         if (profile && user.user_type?.id === 1 && !profile.location) {
           const storedCity = await SecureStore.getItemAsync('user_city');
           if (storedCity) profile.location = storedCity;
         }
-        // ──────────────────────────────────────────────────────────────────
-
         setProfileData(profile);
       }
 
       const requestsRes = await fetch(`${ENV.API_BASE_URL}/service_request`);
       if (requestsRes.ok) {
-        const allData: ServiceRequest[] = await requestsRes.json();
+        const text = await requestsRes.text();
+        const allData: ServiceRequest[] = text ? JSON.parse(text) : [];
         const userRequests = allData.filter(req => req.id_user === user.id);
         setServiceRequests(userRequests);
         setActiveRequestsCount(userRequests.filter(req => !req.agree).length);
@@ -165,7 +163,7 @@ export default function ProfileScreen() {
 
   const formatJoinDate = (dateString: string) => {
     if (!dateString) return '';
-    return new Date(dateString).toLocaleDateString('ar-EG', { year: 'numeric', month: 'long' });
+    return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
   };
 
   const getBasePath = () => user?.user_type?.id === 2 ? '/(provider)' : '/(client)';
@@ -206,6 +204,25 @@ export default function ProfileScreen() {
           icon: '🔒',
           label: 'تغيير كلمة السر',
           action: () => router.push(`${getBasePath()}/change-password`),
+          showArrow: true,
+          danger: false,
+        },
+      ],
+    },
+    {
+      title: 'قانوني',
+      items: [
+        {
+          icon: '📄',
+          label: 'شروط الاستخدام',
+          action: () => router.push('/(client)/terms-of-use'),
+          showArrow: true,
+          danger: false,
+        },
+        {
+          icon: '🔐',
+          label: 'سياسة الخصوصية',
+          action: () => router.push('/(client)/privacy-policy'),
           showArrow: true,
           danger: false,
         },
@@ -355,7 +372,6 @@ export default function ProfileScreen() {
         <Text style={styles.versionText}>الإصدار 1.0.0</Text>
       </ScrollView>
 
-      {/* Custom Modal */}
       <CustomModal
         visible={modalVisible}
         type={modalType}

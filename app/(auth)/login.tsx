@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   logoSection: { alignItems: 'center', marginBottom: hp(4) },
   logoIcon: {
     width: wp(18), height: wp(18), borderRadius: wp(9),
-    backgroundColor: '#F4C430', justifyContent: 'center', alignItems: 'center',
+    justifyContent: 'center', alignItems: 'center',
     overflow: 'hidden', marginBottom: hp(2),
   },
   logoImage: { width: '80%', height: '80%' },

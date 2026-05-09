@@ -29,6 +29,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   signup: (data: SignupData) => Promise<User>;
   updateUser: (userData: Partial<User>) => void;
+  refreshUser: () => Promise<void>;
 }
 
 interface SignupData {
@@ -42,6 +43,13 @@ interface SignupData {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const getApiHeaders = () => ({
+  'Content-Type': 'application/json',
+  ...(ENV.API_BASE_URL?.includes('ngrok') && {
+    'ngrok-skip-browser-warning': 'true',
+  }),
+});
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -57,15 +65,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await fetch(
         `${ENV.API_BASE_URL}/provider_profiles?user_id=${userId}`,
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: getApiHeaders() }
       );
       if (!response.ok) return false;
       const data = await response.json();
       const profile = Array.isArray(data) ? data[0] : data;
-      return !!(
-        
-        profile?.category?.trim()
-      );
+      return !!(profile?.category?.trim());
     } catch {
       return false;
     }
@@ -75,7 +80,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await fetch(
         `${ENV.API_BASE_URL}/provider_profiles/subscription-status/${userId}`,
-        { headers: { 'Content-Type': 'application/json' } }
+        { headers: getApiHeaders() }
       );
       if (!response.ok) return false;
       const data = await response.json();
@@ -87,7 +92,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const navigateAfterLogin = async (targetUser: User) => {
     if (_hasNavigated) {
-      console.log('⏭️ Already navigated, skipping');
       setIsLoading(false);
       return;
     }
@@ -95,28 +99,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       if (targetUser.user_type.id === 1) {
-        console.log('🚀 Redirecting to Client Dashboard');
         router.replace('/(client)/(tabs)');
       } else if (targetUser.user_type.id === 2) {
-        console.log('🔍 Checking provider subscription and setup...');
-
-        // 1. Check subscription first
         const hasSubscription = await checkProviderSubscription(targetUser.id);
         if (!hasSubscription) {
-          console.log('💳 Provider needs subscription');
           router.replace('/(provider)/choose-subscription');
           return;
         }
 
-        // 2. Then check business setup
         const hasSetup = await checkProviderSetup(targetUser.id);
         if (!hasSetup) {
-          console.log('🏢 Provider needs business setup');
           router.replace('/(provider)/provider-setup');
           return;
         }
 
-        console.log('✅ Provider fully set up - redirecting to dashboard');
         router.replace('/(provider)/(tabs)');
       }
     } finally {
@@ -135,7 +131,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(parsedUser);
         await navigateAfterLogin(parsedUser);
       } else {
-        console.log('❌ No stored session found');
         setIsLoading(false);
       }
     } catch (error) {
@@ -144,11 +139,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // ✅ Re-fetches the latest user data from the API and updates state + SecureStore
+  const refreshUser = async () => {
+    try {
+      const storedToken = await SecureStore.getItemAsync('token');
+      const storedUser = await SecureStore.getItemAsync('user');
+      if (!storedToken || !storedUser) return;
+
+      const parsedUser: User = JSON.parse(storedUser);
+
+      const response = await fetch(
+        `${ENV.API_BASE_URL}/users/${parsedUser.id}`,
+        {
+          headers: {
+            ...getApiHeaders(),
+            Authorization: `Bearer ${storedToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) return;
+
+      const freshUser: User = await response.json();
+      setUser(freshUser);
+      await SecureStore.setItemAsync('user', JSON.stringify(freshUser));
+    } catch (error) {
+      console.error('❌ refreshUser error:', error);
+    }
+  };
+
   const login = async (email: string, password: string) => {
     try {
       const response = await fetch(`${ENV.API_BASE_URL}/users/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiHeaders(),
         body: JSON.stringify({ email, password }),
       });
 
@@ -194,7 +218,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const response = await fetch(`${ENV.API_BASE_URL}/users/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiHeaders(),
         body: JSON.stringify(data),
       });
 
@@ -203,7 +227,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       await fetch(`${ENV.API_BASE_URL}/email/send-verification-email`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiHeaders(),
         body: JSON.stringify({ email: data.email, address: data.city }),
       });
 
@@ -233,6 +257,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         signup,
         updateUser,
+        refreshUser,
       }}
     >
       {children}

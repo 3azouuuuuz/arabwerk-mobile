@@ -407,7 +407,7 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, paddingBottom: hp(4), paddingHorizontal: wp(6) },
 
   logoSection: { alignItems: 'center', marginBottom: hp(3), marginTop: hp(2) },
-  logoIcon: { width: wp(15), height: wp(15), borderRadius: wp(7.5), backgroundColor: '#F4C430', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: hp(1.5) },
+  logoIcon: { width: wp(15), height: wp(15), borderRadius: wp(7.5),  justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: hp(1.5) },
   logoImage: { width: '80%', height: '80%' },
   logoText: { fontSize: wp(8), fontWeight: 'bold', color: '#2F6FDB', marginBottom: hp(0.8) },
   welcomeText: { fontSize: wp(5.5), fontWeight: '700', color: '#1F2937', marginBottom: hp(0.5) },

@@ -72,7 +72,7 @@ export default function ClientHomeScreen() {
         setPosts(sortedPosts);
       }
     } catch (error) {
-      console.error('Error fetching user posts:', error);
+      console.error('خطأ في جلب المنشورات:', error);
     } finally {
       setIsLoadingPosts(false);
     }
@@ -92,7 +92,7 @@ export default function ClientHomeScreen() {
   };
 
   const handleNotificationPress = () => {
-    console.log('🔔 Notifications pressed');
+    console.log('🔔 تم الضغط على الإشعارات');
   };
 
   const handlePostNewJob = () => {
@@ -116,13 +116,13 @@ export default function ClientHomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* User Greeting */}
+        {/* تحية المستخدم */}
         <View style={styles.greetingSection}>
-          <Text style={styles.greeting}>Hello,</Text>
+          <Text style={styles.greeting}>مرحباً،</Text>
           <Text style={styles.userName}>{user?.firstname} {user?.lastname}</Text>
         </View>
 
-        {/* Post New Job Button */}
+        {/* زر نشر طلب جديد */}
         <Pressable
           style={({ pressed }) => [styles.postJobButton, pressed && styles.postJobButtonPressed]}
           onPress={handlePostNewJob}
@@ -132,19 +132,19 @@ export default function ClientHomeScreen() {
               <Text style={styles.postJobIconText}>✏️</Text>
             </View>
             <View style={styles.postJobTextContainer}>
-              <Text style={styles.postJobTitle}>Post a New Job</Text>
-              <Text style={styles.postJobSubtitle}>Find the perfect professional for your needs</Text>
+              <Text style={styles.postJobTitle}>نشر طلب جديد</Text>
+              <Text style={styles.postJobSubtitle}>ابحث عن المحترف المناسب لاحتياجاتك</Text>
             </View>
           </View>
         </Pressable>
 
-        {/* My Recent Posts */}
+        {/* منشوراتي الأخيرة */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>My Posts</Text>
+            <Text style={styles.sectionTitle}>طلباتي</Text>
             {posts.length > 0 && (
               <Pressable onPress={handleViewAllPosts}>
-                <Text style={styles.viewAllText}>View All</Text>
+                <Text style={styles.viewAllText}>عرض الكل</Text>
               </Pressable>
             )}
           </View>
@@ -152,17 +152,17 @@ export default function ClientHomeScreen() {
           {isLoadingPosts ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#2F6FDB" />
-              <Text style={styles.loadingText}>Loading your posts...</Text>
+              <Text style={styles.loadingText}>جارٍ تحميل طلباتك...</Text>
             </View>
           ) : posts.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📝</Text>
-              <Text style={styles.emptyTitle}>No posts yet</Text>
+              <Text style={styles.emptyTitle}>لا توجد طلبات بعد</Text>
               <Text style={styles.emptySubtitle}>
-                Create your first job post to get started
+                أنشئ أول طلب خدمة للبدء
               </Text>
               <Pressable style={styles.emptyButton} onPress={handlePostNewJob}>
-                <Text style={styles.emptyButtonText}>Create Post</Text>
+                <Text style={styles.emptyButtonText}>إنشاء طلب</Text>
               </Pressable>
             </View>
           ) : (
@@ -193,11 +193,11 @@ export default function ClientHomeScreen() {
                   {post.desc_service}
                 </Text>
                 <Text style={styles.postLocation}>
-                  📍 {post.service_address}{post.zip_code ? `, ${post.zip_code}` : ''}
+                  📍 {post.service_address}{post.zip_code ? `، ${post.zip_code}` : ''}
                 </Text>
                 {post.price_service && (
                   <Text style={styles.postBudget}>
-                    💰 Budget: €{post.price_service}
+                    💰 الميزانية: €{post.price_service}
                   </Text>
                 )}
                 <View style={styles.postFooter}>

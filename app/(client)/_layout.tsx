@@ -1,5 +1,4 @@
 import { Stack } from 'expo-router';
-
 export default function ClientLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
@@ -13,8 +12,6 @@ export default function ClientLayout() {
           animation: 'slide_from_right',
         }}
       />
-
-      {/* ── Chat ── */}
       <Stack.Screen
         name="chat"
         options={{
@@ -22,8 +19,6 @@ export default function ClientLayout() {
           animation: 'slide_from_right',
         }}
       />
-
-      {/* Settings Screens */}
       <Stack.Screen
         name="account-info"
         options={{
@@ -54,6 +49,20 @@ export default function ClientLayout() {
       />
       <Stack.Screen
         name="delete-account"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="terms-of-use"
+        options={{
+          presentation: 'card',
+          animation: 'slide_from_right',
+        }}
+      />
+      <Stack.Screen
+        name="privacy-policy"
         options={{
           presentation: 'card',
           animation: 'slide_from_right',

@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   logoSection: { alignItems: 'center', marginTop: hp(2) },
   logoIcon: {
     width: wp(15), height: wp(15), borderRadius: wp(7.5),
-    backgroundColor: '#F4C430', justifyContent: 'center', alignItems: 'center',
+     justifyContent: 'center', alignItems: 'center',
     overflow: 'hidden', marginBottom: hp(1.5),
   },
   logoImage: { width: '80%', height: '80%' },

@@ -1,12 +1,13 @@
 import LoadingComponent from '@/components/LoadingComponent';
+import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
   StyleSheet,
   Text,
-  View
+  View,
 } from 'react-native';
 import ClientHeader from '../../../components/ClientHeader';
 import FilterBar from '../../../components/FilterBar';
@@ -18,12 +19,7 @@ import { AverageRating, Provider, ViewMode } from '../../../utils/types';
 import { useCitySearch } from '../../../utils/useCitySearch';
 import { useProvidersData } from '../../../utils/useProvidersData';
 
-const LOAD_COUNT = 12;
-
-// Plans considered "pro" — adjust if your plan names differ
-const PRO_PLANS = ['pro', 'Pro', 'PRO', 'premium', 'Premium', 'PREMIUM'];
-
-const isPro = (plan: string) => PRO_PLANS.includes(plan?.trim() || '');
+const PAGE_SIZE = 12;
 
 export default function DiscoverScreen() {
   const { user } = useAuth();
@@ -37,22 +33,22 @@ export default function DiscoverScreen() {
     fetchRatingsData,
   } = useProvidersData(user?.id, user?.user_type?.id);
 
-  const {
-    city,
-    citySuggestions,
-    handleCityInputChange,
-    handleCitySelect,
-  } = useCitySearch();
+  const { city, citySuggestions, handleCityInputChange, handleCitySelect } = useCitySearch();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(LOAD_COUNT);
+  const [currentPage, setCurrentPage] = useState(1);
   const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('list');
 
-  const handleNotificationPress = useCallback(() => {
-    console.log('🔔 Notifications pressed');
-  }, []);
+  // Reset to page 1 whenever filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setExpandedProviderId(null);
+  }, [selectedCategory, city]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleNotificationPress = useCallback(() => {}, []);
 
   const handleCategoryPress = useCallback(() => {
     setShowCategoryPicker((prev) => !prev);
@@ -73,27 +69,20 @@ export default function DiscoverScreen() {
 
   const handleRate = useCallback(
     async (provider_id: string, rating: number) => {
-      if (!user?.id) {
-        alert('Please login to rate');
-        return;
-      }
-      if (user.id.toString() === provider_id) {
-        alert('Cannot rate your own account');
-        return;
-      }
+      if (!user?.id) { alert('Please login to rate'); return; }
+      if (user.id.toString() === provider_id) { alert('Cannot rate your own account'); return; }
+
       try {
         const res = await fetch(
           `${ENV.API_BASE_URL}/ratings?provider_id=${provider_id}&user_id=${user.id}`
         );
         const existing = await res.json();
+
         if (existing.length > 0) {
           await fetch(`${ENV.API_BASE_URL}/ratings/${existing[0].id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              rating,
-              created_at: new Date().toISOString(),
-            }),
+            body: JSON.stringify({ rating, created_at: new Date().toISOString() }),
           });
           alert('Rating updated successfully');
         } else {
@@ -108,62 +97,50 @@ export default function DiscoverScreen() {
           });
           alert('Rating added successfully');
         }
+
+        // Only update display rating — does NOT re-sort
         setRatings((prev) => ({
           ...prev,
-          [provider_id]: {
-            ...prev[provider_id],
-            userRating: rating,
-          },
+          [provider_id]: { ...prev[provider_id], userRating: rating },
         }));
         fetchRatingsData();
-      } catch (error) {
-        console.error('Error rating:', error);
+      } catch (e) {
+        console.error('Error rating:', e);
         alert('Error submitting rating');
       }
     },
     [user, setRatings, fetchRatingsData]
   );
 
-  const processedProviders = useMemo(() => {
-    // STEP 1: Filter by category
-    let filtered = providers.filter(provider => {
-      if (selectedCategory && !provider.categories.includes(selectedCategory)) {
-        return false;
-      }
-      return true;
-    });
+  // ── FILTER ONLY — no sorting, providers already sorted correctly from hook ─
+  const filteredProviders = useMemo(() => {
+    let result = providers;
 
-    // STEP 2: Filter by city (text match)
-    if (city && city.trim() !== '') {
-      filtered = filtered.filter(provider =>
-        provider.city && provider.city.toLowerCase().includes(city.toLowerCase())
+    if (selectedCategory) {
+      result = result.filter((p) => p.categories.includes(selectedCategory));
+    }
+
+    if (city.trim()) {
+      result = result.filter(
+        (p) => p.city && p.city.toLowerCase().includes(city.toLowerCase())
       );
     }
 
-    // STEP 3: Sort — Pro high rating → Pro low rating → Free high rating → Free low rating
-    const sorted = [...filtered].sort((a, b) => {
-      const aIsPro = isPro(a.plan);
-      const bIsPro = isPro(b.plan);
-      const ratingA = ratings[a.user_id]?.avg || 0;
-      const ratingB = ratings[b.user_id]?.avg || 0;
+    return result;
+  }, [providers, selectedCategory, city]);
 
-      // Both pro or both free — sort by rating descending
-      if (aIsPro && bIsPro) return ratingB - ratingA;
-      if (!aIsPro && !bIsPro) return ratingB - ratingA;
-
-      // Pro always comes before free
-      if (aIsPro && !bIsPro) return -1;
-      return 1;
-    });
-
-    return sorted;
-  }, [providers, selectedCategory, city, ratings]);
-
-  const visibleProviders = useMemo(
-    () => processedProviders.slice(0, visibleCount),
-    [processedProviders, visibleCount]
+  // ── Pagination ────────────────────────────────────────────────────────────
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredProviders.length / PAGE_SIZE)),
+    [filteredProviders]
   );
 
+  const pageProviders = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredProviders.slice(start, start + PAGE_SIZE);
+  }, [filteredProviders, currentPage]);
+
+  // ── Render item ───────────────────────────────────────────────────────────
   const renderProvider = useCallback(
     ({ item }: { item: Provider }) => {
       const ratingData: AverageRating = ratings[item.user_id] || {
@@ -187,7 +164,74 @@ export default function DiscoverScreen() {
     [ratings, user, expandedProviderId, viewMode, handleRate, handleToggleExpand]
   );
 
-  const listKey = `${viewMode}-${selectedCategory}-${city}`;
+  // ── Pagination bar ────────────────────────────────────────────────────────
+  const renderPagination = () => {
+    if (totalPages <= 1) return null;
+
+    const pages: (number | 'ellipsis')[] = [];
+    const delta = 1;
+    const range: number[] = [];
+
+    for (
+      let i = Math.max(2, currentPage - delta);
+      i <= Math.min(totalPages - 1, currentPage + delta);
+      i++
+    ) {
+      range.push(i);
+    }
+
+    pages.push(1);
+    if (range.length > 0 && range[0] > 2) pages.push('ellipsis');
+    pages.push(...range);
+    if (range.length > 0 && range[range.length - 1] < totalPages - 1) pages.push('ellipsis');
+    if (totalPages > 1) pages.push(totalPages);
+
+    return (
+      <View style={styles.paginationContainer}>
+        <Pressable
+          style={[styles.pageBtn, currentPage === 1 && styles.pageBtnDisabled]}
+          onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+          disabled={currentPage === 1}
+        >
+          <Ionicons
+            name="chevron-back"
+            size={wp(4)}
+            color={currentPage === 1 ? '#D1D5DB' : '#2F6FDB'}
+          />
+        </Pressable>
+
+        {pages.map((p, idx) =>
+          p === 'ellipsis' ? (
+            <Text key={`e-${idx}`} style={styles.ellipsis}>…</Text>
+          ) : (
+            <Pressable
+              key={p}
+              style={[styles.pageBtn, currentPage === p && styles.pageBtnActive]}
+              onPress={() => setCurrentPage(p)}
+            >
+              <Text style={[styles.pageBtnText, currentPage === p && styles.pageBtnTextActive]}>
+                {p}
+              </Text>
+            </Pressable>
+          )
+        )}
+
+        <Pressable
+          style={[styles.pageBtn, currentPage === totalPages && styles.pageBtnDisabled]}
+          onPress={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+          disabled={currentPage === totalPages}
+        >
+          <Ionicons
+            name="chevron-forward"
+            size={wp(4)}
+            color={currentPage === totalPages ? '#D1D5DB' : '#2F6FDB'}
+          />
+        </Pressable>
+      </View>
+    );
+  };
+
+  const listKey = `${viewMode}-${selectedCategory}-${city}-p${currentPage}`;
   const numColumns = viewMode === 'grid' ? 2 : 1;
   const columnWrapperStyle = viewMode === 'grid' ? styles.gridRow : undefined;
 
@@ -208,12 +252,20 @@ export default function DiscoverScreen() {
         onCitySelect={handleCitySelect}
         onViewModeChange={handleViewModeChange}
       />
+
+      {!isInitialLoad && (
+        <View style={styles.resultsRow}>
+          <Text style={styles.resultsText}>{filteredProviders.length} مزود خدمة</Text>
+          <Text style={styles.pageInfo}>صفحة {currentPage} من {totalPages}</Text>
+        </View>
+      )}
+
       {isInitialLoad ? (
         <LoadingComponent message="جاري تحميل الخدمات..." />
       ) : (
         <FlatList
           key={listKey}
-          data={visibleProviders}
+          data={pageProviders}
           renderItem={renderProvider}
           keyExtractor={(item) => item.user_id}
           numColumns={numColumns}
@@ -222,21 +274,13 @@ export default function DiscoverScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>🔍</Text>
               <Text style={styles.emptyText}>
                 لا توجد خدمات متاحة حسب الفلاتر المختارة
               </Text>
             </View>
           }
-          ListFooterComponent={
-            !isInitialLoad && visibleCount < processedProviders.length ? (
-              <Pressable
-                style={styles.loadMoreButton}
-                onPress={() => setVisibleCount((prev) => prev + LOAD_COUNT)}
-              >
-                <Text style={styles.loadMoreText}>عرض المزيد</Text>
-              </Pressable>
-            ) : null
-          }
+          ListFooterComponent={renderPagination()}
         />
       )}
     </View>
@@ -244,38 +288,48 @@ export default function DiscoverScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  listContent: {
-    padding: wp(4),
-    gap: hp(2),
-  },
-  gridRow: {
+  container: { flex: 1, backgroundColor: '#F9FAFB' },
+
+  resultsRow: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: wp(4),
-  },
-  emptyContainer: {
-    padding: wp(8),
     alignItems: 'center',
+    paddingHorizontal: wp(5),
+    paddingVertical: hp(0.8),
   },
-  emptyText: {
-    fontSize: wp(4),
-    color: '#6B7280',
-    textAlign: 'center',
+  resultsText: { fontSize: wp(3.2), color: '#6B7280', fontWeight: '500' },
+  pageInfo: { fontSize: wp(3.2), color: '#6B7280', fontWeight: '500' },
+
+  listContent: { padding: wp(4), gap: hp(2), paddingBottom: hp(4) },
+  gridRow: { justifyContent: 'space-between', gap: wp(4) },
+
+  emptyContainer: { padding: wp(8), alignItems: 'center', gap: hp(1.5) },
+  emptyIcon: { fontSize: wp(10) },
+  emptyText: { fontSize: wp(4), color: '#6B7280', textAlign: 'center' },
+
+  paginationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: wp(1.5),
+    paddingVertical: hp(2.5),
+    paddingHorizontal: wp(4),
+    flexWrap: 'wrap',
   },
-  loadMoreButton: {
-    backgroundColor: '#2F6FDB',
-    paddingVertical: hp(1.5),
-    paddingHorizontal: wp(8),
-    borderRadius: 12,
-    alignSelf: 'center',
-    marginVertical: hp(2),
+  pageBtn: {
+    minWidth: wp(9),
+    height: wp(9),
+    borderRadius: wp(4.5),
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: wp(2),
   },
-  loadMoreText: {
-    fontSize: wp(4),
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
+  pageBtnActive: { backgroundColor: '#2F6FDB', borderColor: '#2F6FDB' },
+  pageBtnDisabled: { backgroundColor: '#F9FAFB', borderColor: '#F3F4F6' },
+  pageBtnText: { fontSize: wp(3.5), color: '#374151', fontWeight: '600' },
+  pageBtnTextActive: { color: '#FFFFFF' },
+  ellipsis: { fontSize: wp(3.5), color: '#9CA3AF', paddingHorizontal: wp(1) },
 });

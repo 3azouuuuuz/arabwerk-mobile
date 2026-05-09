@@ -16,14 +16,13 @@ export default function ClientHeader({ onNotificationPress }: ClientHeaderProps)
     if (onNotificationPress) {
       onNotificationPress();
     }
-    // Navigate to notifications screen
     router.push('/(client)/notifications');
   };
 
   return (
     <View style={styles.container}>
-      {/* Notification Icon */}
-      <Pressable 
+      {/* أيقونة الإشعارات */}
+      <Pressable
         style={({ pressed }) => [
           styles.notificationButton,
           pressed && styles.notificationButtonPressed
@@ -31,8 +30,8 @@ export default function ClientHeader({ onNotificationPress }: ClientHeaderProps)
         onPress={handleNotificationPress}
       >
         <FontAwesome name="bell-o" size={wp(5.5)} color="#1F2937" />
-        
-        {/* Notification Badge - show when there are unread notifications */}
+
+        {/* شارة الإشعارات - تظهر عند وجود إشعارات غير مقروءة */}
         {unreadCount > 0 && (
           <View style={styles.badge}>
             <Text style={styles.badgeText}>
@@ -42,15 +41,14 @@ export default function ClientHeader({ onNotificationPress }: ClientHeaderProps)
         )}
       </Pressable>
 
-      {/* Logo and Text Section */}
+      {/* قسم الشعار والنص */}
       <View style={styles.logoSection}>
-        {/* Text Content */}
+        {/* محتوى النص */}
         <View style={styles.textContent}>
           <Text style={styles.title}>ArabWerk</Text>
-          <Text style={styles.subtitle}>Find skilled professionals</Text>
+          <Text style={styles.subtitle}>ابحث عن محترفين مهرة</Text>
         </View>
-
-        {/* App Logo */}
+        {/* شعار التطبيق */}
         <View style={styles.logoContainer}>
           <Image
             source={require('../assets/images/logo.png')}
@@ -97,7 +95,6 @@ const styles = StyleSheet.create({
     width: wp(12),
     height: wp(12),
     borderRadius: wp(6),
-    backgroundColor: '#F4C430',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',

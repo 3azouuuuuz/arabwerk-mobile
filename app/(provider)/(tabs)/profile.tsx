@@ -151,7 +151,6 @@ export default function ProviderProfileScreen() {
 
       if (!imageUrl) throw new Error('لم يتم الحصول على رابط الصورة');
 
-      // Save to provider profile
       const patchRes = await fetch(`${ENV.API_BASE_URL}/provider_profiles/${user?.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -203,6 +202,14 @@ export default function ProviderProfileScreen() {
       ],
     },
     {
+      // "Legal" section
+      title: 'قانوني',
+      items: [
+        { icon: '📄', label: 'شروط الاستخدام', action: () => router.push('/(provider)/terms-of-use'), showArrow: true, danger: false },
+        { icon: '🔐', label: 'سياسة الخصوصية', action: () => router.push('/(provider)/privacy-policy'), showArrow: true, danger: false },
+      ],
+    },
+    {
       title: 'إعدادات الحساب',
       items: [
         { icon: '🗑️', label: 'حذف الحساب', action: () => router.push('/(provider)/delete-account'), showArrow: true, danger: true },
@@ -246,7 +253,6 @@ export default function ProviderProfileScreen() {
                 </View>
               )}
 
-              {/* Upload overlay while uploading */}
               {isUploadingPhoto && (
                 <View style={styles.uploadingOverlay}>
                   <ActivityIndicator size="small" color="#FFFFFF" />
@@ -254,7 +260,6 @@ export default function ProviderProfileScreen() {
               )}
             </View>
 
-            {/* Edit icon button */}
             <Pressable
               style={({ pressed }) => [styles.editPhotoBtn, pressed && { opacity: 0.7 }]}
               onPress={handleChangePhoto}
@@ -375,10 +380,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
   },
 
-  // ── Avatar ──────────────────────────────────────────────────────────────
-  avatarContainer: {
-    position: 'relative', marginBottom: hp(1.5),
-  },
+  avatarContainer: { position: 'relative', marginBottom: hp(1.5) },
   avatarWrapper: {
     width: wp(22), height: wp(22), borderRadius: wp(11),
     borderWidth: 4, borderColor: '#EEF5FF', overflow: 'hidden',
@@ -404,7 +406,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2, shadowRadius: 4, elevation: 4,
   },
   editPhotoIcon: { fontSize: wp(3.5) },
-  // ─────────────────────────────────────────────────────────────────────────
 
   userName: { fontSize: wp(5.5), fontWeight: '800', color: '#1F2937', marginBottom: hp(0.3) },
   userEmail: { fontSize: wp(3.5), color: '#9CA3AF', marginBottom: hp(1.5) },
